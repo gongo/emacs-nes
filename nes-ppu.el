@@ -178,46 +178,123 @@
     (#x2004 (nes/ppu--read-from-sprite-ram p (nes/ppu->sprite-ram-addr p)))
 
     (#x2007 (progn
-              (nes/ppu--bus-read (nes/ppu->bus p) (nes/ppu->video-ram-addr p))
-              (incf (nes/ppu->video-ram-addr p) (nes/ppu--video-ram-addr-offset p))))
+              (nes/ppu--bus-read (nes/ppu->bus p) (nes/ppu->v p))
+              (incf (nes/ppu->v p) (nes/ppu--video-ram-addr-offset p))))
     (t 0)
     ))
 
 (defun nes/ppu-write (p addr value)
   (case addr
-    (#x2000 (setf (nes/ppu->ppuctrl p) value))
-
-    (#x2001 (setf (nes/ppu->ppumask p) value))
-
-    (#x2003 (setf (nes/ppu->sprite-ram-addr p) value))
-
-    (#x2004 (progn
-              (aset (nes/ppu->sprite-ram p) (nes/ppu->sprite-ram-addr p) value)
-              (setf (nes/ppu->sprite-ram-addr p) (logand (1+ (nes/ppu->sprite-ram-addr p)) #xFF))))
-
-    (#x2005 (let ((value2 (logand value #xFF)))
-              (if (nes/ppu->writing-scroll-data p)
-                  (progn
-                    (setf (nes/ppu->writing-scroll-data p) nil)
-                    (setf (nes/ppu->scroll-x p) value2))
-                (progn
-                  (setf (nes/ppu->writing-scroll-data p) t)
-                  (setf (nes/ppu->scroll-y p) value2)))))
-
-    (#x2006 (setf (nes/ppu->video-ram-addr p)
-                  (if (nes/ppu->writing-video-ram-addr p)
-                      (progn
-                        (setf (nes/ppu->writing-video-ram-addr p) nil)
-                        (+ (nes/ppu->video-ram-addr p) (logand value #x00FF)))
-                    (progn
-                      (setf (nes/ppu->writing-video-ram-addr p) t)
-                      (logand (lsh value 8) #xFF00)))))
-
-    (#x2007 (progn
-              (nes/ppu--bus-write (nes/ppu->bus p) (nes/ppu->video-ram-addr p) value)
-              (incf (nes/ppu->video-ram-addr p) (nes/ppu--video-ram-addr-offset p))))
+    (#x2000 (nes/ppu--write-control p value))
+    (#x2001 (nes/ppu--write-mask p value))
+    (#x2003 (nes/ppu--write-oam-address p value))
+    (#x2004 (nes/ppu--write-oam-data p value))
+    (#x2005 (nes/ppu--write-scroll p value))
+    (#x2006 (nes/ppu--write-address p value))
+    (#x2007 (nes/ppu--write-data p value))
     ;;(t 0)
     ))
+
+;;
+;; https://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls
+;;
+;; $2000 write
+;;
+(defsubst nes/ppu--write-control (ppu value)
+  (setf (nes/ppu->ppuctrl ppu) value)
+  ;; t: ...BA.. ........ = d: ......BA
+  (setf (nes/ppu->t ppu) (logior (logand (nes/ppu->t ppu) #xF3FF)
+                                 (lsh (logand value #x03) 10))))
+
+;;
+;; https://wiki.nesdev.com/w/index.php/PPU_registers
+;;
+;; $2001 write
+;;
+(defsubst nes/ppu--write-mask (ppu value)
+  (setf (nes/ppu->ppumask p) value))
+
+;;
+;; https://wiki.nesdev.com/w/index.php/PPU_registers
+;;
+;; $2003 write
+;;
+(defsubst nes/ppu--write-oam-address (ppu value)
+  (setf (nes/ppu->sprite-ram-addr ppu) value))
+
+;;
+;; https://wiki.nesdev.com/w/index.php/PPU_registers
+;;
+;; $2004 write
+;;
+(defsubst nes/ppu--write-oam-data (ppu value)
+  (aset (nes/ppu->sprite-ram ppu) (nes/ppu->sprite-ram-addr ppu) value)
+  (incf (nes/ppu->sprite-ram-addr ppu)))
+
+;;
+;; https://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls
+;;
+;; $2005 write
+;;
+(defsubst nes/ppu--write-scroll (ppu value)
+  (if (nes/ppu->w ppu)
+      (progn
+        ;;
+        ;; t: CBA..HG FED..... = d: HGFEDCBA
+        ;; w:                  = 0
+        ;;
+        (setf (nes/ppu->t ppu) (logior (logand (nes/ppu->t ppu) #x8FFF)
+                                       (lsh (logand value #x07) 12)))
+        (setf (nes/ppu->t ppu) (logior (logand (nes/ppu->t ppu) #xFC1F)
+                                       (lsh (logand value #xF8) 2)))
+        (setf (nes/ppu->w ppu) nil))
+    (progn
+      ;;
+      ;; t: ....... ...HGFED = d: HGFED...
+      ;; x:              CBA = d: .....CBA
+      ;; w:                  = 1
+      ;;
+      (setf (nes/ppu->t ppu) (logior (logand (nes/ppu->t ppu) #xFFE0)
+                                     (lsh (logand value #xFF) -3)))
+      (setf (nes/ppu->x ppu) (logand value #x07))
+      (setf (nes/ppu->w ppu) t))))
+
+;;
+;; https://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls
+;;
+;; $2006 write
+;;
+(defsubst nes/ppu--write-address (ppu value)
+  (if (nes/ppu->w ppu)
+      (progn
+        ;;
+        ;; t: ....... HGFEDCBA = d: HGFEDCBA
+        ;; v                   = t
+        ;; w:                  = 0
+        ;;
+        (setf (nes/ppu->t ppu) (logior (logand (nes/ppu->t ppu) #xFF00)
+                                       (logand value #xFF)))
+        (setf (nes/ppu->v ppu) (nes/ppu->t ppu))
+        (setf (nes/ppu->w ppu) nil))
+    (progn
+      ;;
+      ;; t: .FEDCBA ........ = d: ..FEDCBA
+      ;; t: X...... ........ = 0
+      ;; w:                  = 1
+      ;;
+      (setf (nes/ppu->t ppu) (logior (logand (nes/ppu->t ppu) #x80FF)
+                                     (ash (logand value #x3F) 8)))
+      (setf (nes/ppu->t ppu) (mod (nes/ppu->t ppu) #x6000))
+      (setf (nes/ppu->w ppu) t))))
+
+;;
+;; https://wiki.nesdev.com/w/index.php/PPU_registers
+;;
+;; $2007 write
+;;
+(defsubst nes/ppu--write-data (ppu value)
+  (nes/ppu--bus-write (nes/ppu->bus ppu) (nes/ppu->v ppu) value)
+  (incf (nes/ppu->v ppu) (nes/ppu--video-ram-addr-offset ppu)))
 
 (defun nes/ppu--read-from-character-data (p index)
   (nes/ppu--bus-read (nes/ppu->bus p) index))
