@@ -170,16 +170,9 @@
 
 (defun nes/ppu-read (p addr)
   (case addr
-    (#x2002 (let ((data (nes/ppu->ppustatus p)))
-              (setf (nes/ppu->writing-video-ram-addr p) nil)
-              (nes/ppu--clear-vblank p)
-              data))
-
-    (#x2004 (nes/ppu--read-from-sprite-ram p (nes/ppu->sprite-ram-addr p)))
-
-    (#x2007 (progn
-              (nes/ppu--bus-read (nes/ppu->bus p) (nes/ppu->v p))
-              (incf (nes/ppu->v p) (nes/ppu--video-ram-addr-offset p))))
+    (#x2002 (nes/ppu--read-status p))
+    (#x2004 (nes/ppu--read-oam-data p))
+    (#x2007 (nes/ppu--read-data p))
     (t 0)
     ))
 
@@ -216,11 +209,31 @@
 
 ;;
 ;; https://wiki.nesdev.com/w/index.php/PPU_registers
+;; https://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls
+;;
+;; $2002 read
+;;
+(defsubst nes/ppu--read-status (ppu)
+  (let ((data (nes/ppu->ppustatus ppu)))
+    (nes/ppu--clear-vblank p)
+    (setf (nes/ppu->w ppu) nil)
+    data))
+
+;;
+;; https://wiki.nesdev.com/w/index.php/PPU_registers
 ;;
 ;; $2003 write
 ;;
 (defsubst nes/ppu--write-oam-address (ppu value)
   (setf (nes/ppu->sprite-ram-addr ppu) value))
+
+;;
+;; https://wiki.nesdev.com/w/index.php/PPU_registers
+;;
+;; $2004 read
+;;
+(defsubst nes/ppu--read-oam-data (ppu)
+  (nes/ppu--read-from-sprite-ram ppu (nes/ppu->sprite-ram-addr ppu)))
 
 ;;
 ;; https://wiki.nesdev.com/w/index.php/PPU_registers
@@ -286,6 +299,16 @@
                                      (ash (logand value #x3F) 8)))
       (setf (nes/ppu->t ppu) (mod (nes/ppu->t ppu) #x6000))
       (setf (nes/ppu->w ppu) t))))
+
+;;
+;; https://wiki.nesdev.com/w/index.php/PPU_registers
+;; https://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls
+;;
+;; $2007 read
+;;
+(defsubst nes/ppu--read-data (ppu)
+  (nes/ppu--bus-read (nes/ppu->bus p) (nes/ppu->v p))
+  (incf (nes/ppu->v p) (nes/ppu--video-ram-addr-offset p))))
 
 ;;
 ;; https://wiki.nesdev.com/w/index.php/PPU_registers
