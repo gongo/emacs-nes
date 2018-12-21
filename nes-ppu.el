@@ -106,11 +106,8 @@
   (bus (make-nes/ppu-bus))
   (sprite-ram (make-vector nes/ppu:SPRITE-RAM-BYTESIZE 0))
   (sprite-ram-addr #x00)
-  (video-ram-addr #x0000)
-  (writing-video-ram-addr nil)
   (scroll-x 0)
   (scroll-y 0)
-  (writing-scroll-data nil)
   (interrupt nil)
   (images (make-vector (* nes/ppu:SCREEN-WIDTH nes/ppu:SCREEN-HEIGHT) -1))
   (draw-queue '())
@@ -124,6 +121,13 @@
   (ppuscroll 0)
   (ppuaddr 0)
   (ppudata 0)
+
+  ;; PPU internal registers
+  ;; https://wiki.nesdev.com/w/index.php/PPU_scrolling#PPU_internal_registers
+  (v 0)
+  (t 0)
+  (x 0)
+  (w 0)
   )
 
 (defun nes/ppu--bus-read (b addr)
