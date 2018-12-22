@@ -125,9 +125,9 @@
   ;; PPU internal registers
   ;; https://wiki.nesdev.com/w/index.php/PPU_scrolling#PPU_internal_registers
   (v 0)
-  (t 0)
+  (temp 0) ;; (setting-constant t)
   (x 0)
-  (w 0)
+  (w nil)
   )
 
 (defun nes/ppu--bus-read (b addr)
@@ -196,8 +196,8 @@
 (defsubst nes/ppu--write-control (ppu value)
   (setf (nes/ppu->ppuctrl ppu) value)
   ;; t: ...BA.. ........ = d: ......BA
-  (setf (nes/ppu->t ppu) (logior (logand (nes/ppu->t ppu) #xF3FF)
-                                 (lsh (logand value #x03) 10))))
+  (setf (nes/ppu->temp ppu) (logior (logand (nes/ppu->temp ppu) #xF3FF)
+                                    (lsh (logand value #x03) 10))))
 
 ;;
 ;; https://wiki.nesdev.com/w/index.php/PPU_registers
@@ -205,7 +205,7 @@
 ;; $2001 write
 ;;
 (defsubst nes/ppu--write-mask (ppu value)
-  (setf (nes/ppu->ppumask p) value))
+  (setf (nes/ppu->ppumask ppu) value))
 
 ;;
 ;; https://wiki.nesdev.com/w/index.php/PPU_registers
@@ -215,7 +215,7 @@
 ;;
 (defsubst nes/ppu--read-status (ppu)
   (let ((data (nes/ppu->ppustatus ppu)))
-    (nes/ppu--clear-vblank p)
+    (nes/ppu--clear-vblank ppu)
     (setf (nes/ppu->w ppu) nil)
     data))
 
@@ -256,10 +256,10 @@
         ;; t: CBA..HG FED..... = d: HGFEDCBA
         ;; w:                  = 0
         ;;
-        (setf (nes/ppu->t ppu) (logior (logand (nes/ppu->t ppu) #x8FFF)
-                                       (lsh (logand value #x07) 12)))
-        (setf (nes/ppu->t ppu) (logior (logand (nes/ppu->t ppu) #xFC1F)
-                                       (lsh (logand value #xF8) 2)))
+        (setf (nes/ppu->temp ppu) (logior (logand (nes/ppu->temp ppu) #x8FFF)
+                                          (lsh (logand value #x07) 12)))
+        (setf (nes/ppu->temp ppu) (logior (logand (nes/ppu->temp ppu) #xFC1F)
+                                          (lsh (logand value #xF8) 2)))
         (setf (nes/ppu->w ppu) nil))
     (progn
       ;;
@@ -267,8 +267,8 @@
       ;; x:              CBA = d: .....CBA
       ;; w:                  = 1
       ;;
-      (setf (nes/ppu->t ppu) (logior (logand (nes/ppu->t ppu) #xFFE0)
-                                     (lsh (logand value #xFF) -3)))
+      (setf (nes/ppu->temp ppu) (logior (logand (nes/ppu->temp ppu) #xFFE0)
+                                        (lsh (logand value #xFF) -3)))
       (setf (nes/ppu->x ppu) (logand value #x07))
       (setf (nes/ppu->w ppu) t))))
 
@@ -285,9 +285,9 @@
         ;; v                   = t
         ;; w:                  = 0
         ;;
-        (setf (nes/ppu->t ppu) (logior (logand (nes/ppu->t ppu) #xFF00)
-                                       (logand value #xFF)))
-        (setf (nes/ppu->v ppu) (nes/ppu->t ppu))
+        (setf (nes/ppu->temp ppu) (logior (logand (nes/ppu->temp ppu) #xFF00)
+                                          (logand value #xFF)))
+        (setf (nes/ppu->v ppu) (nes/ppu->temp ppu))
         (setf (nes/ppu->w ppu) nil))
     (progn
       ;;
@@ -295,9 +295,9 @@
       ;; t: X...... ........ = 0
       ;; w:                  = 1
       ;;
-      (setf (nes/ppu->t ppu) (logior (logand (nes/ppu->t ppu) #x80FF)
-                                     (ash (logand value #x3F) 8)))
-      (setf (nes/ppu->t ppu) (mod (nes/ppu->t ppu) #x6000))
+      (setf (nes/ppu->temp ppu) (logior (logand (nes/ppu->temp ppu) #x80FF)
+                                        (ash (logand value #x3F) 8)))
+      (setf (nes/ppu->temp ppu) (mod (nes/ppu->temp ppu) #x6000))
       (setf (nes/ppu->w ppu) t))))
 
 ;;
@@ -307,8 +307,8 @@
 ;; $2007 read
 ;;
 (defsubst nes/ppu--read-data (ppu)
-  (nes/ppu--bus-read (nes/ppu->bus p) (nes/ppu->v p))
-  (incf (nes/ppu->v p) (nes/ppu--video-ram-addr-offset p))))
+  (nes/ppu--bus-read (nes/ppu->bus ppu) (nes/ppu->v ppu))
+  (incf (nes/ppu->v ppu) (nes/ppu--video-ram-addr-offset ppu)))
 
 ;;
 ;; https://wiki.nesdev.com/w/index.php/PPU_registers
