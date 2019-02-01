@@ -62,9 +62,9 @@
   (let ((b (nes/cpu->bus c))
         (ppu (nes/cpu->ppu c)))
     (cond
-     ((< addr #x0800) (aset (nes/cpu-bus->ram b) addr data))
-     ((< addr #x2000) (nes/cpu--bus-write c (- addr #x0800) data))
-     ((< addr #x4000) (nes/ppu-write ppu (+ (mod addr #x0008) #x2000) data))
+     ((< addr #x2000) (aset (nes/cpu-bus->ram b) (% addr #x0800) data))
+     ((< addr #x4000) (nes/ppu-write ppu (+ (% addr #x0008) #x2000) data))
+     ;; ((< addr #x4014) ( ... )) ;; APU
      ((eq addr #x4014) (nes/dma-request-transfer (nes/cpu->dma c) data))
      ((eq addr #x4016) (nes/keypad-write (nes/cpu->keypad c) data))
      ;; ((eq addr #x4017) (nes/keypad-write (nes/cpu->keypad c) data))  ;; 2P
